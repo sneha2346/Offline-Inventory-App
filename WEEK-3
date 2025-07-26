@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Offline Inventory Manager</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .status-indicator {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .online { background-color: #10b981; }
+    .offline { background-color: #ef4444; }
+  </style>
+</head>
+<body class="bg-gray-100 font-sans">
+  <!-- Header -->
+  <header class="bg-white shadow p-4 flex justify-between items-center">
+    <div class="flex items-center">
+      <img src="https://placehold.co/40x40" class="h-10 w-10 rounded" alt="Logo" />
+      <h1 class="ml-3 text-xl font-semibold text-gray-800">Offline Inventory</h1>
+    </div>
+    <div class="flex items-center space-x-4">
+      <div id="connectionStatus" class="flex items-center space-x-2">
+        <span id="statusDot" class="status-indicator offline"></span>
+        <span id="statusText" class="text-sm text-gray-600">Offline</span>
+      </div>
+      <button id="syncBtn" class="bg-green-600 text-white px-3 py-1 rounded text-sm" disabled>Sync</button>
+      <button id="addItemBtn" class="bg-indigo-600 text-white px-4 py-2 rounded text-sm">Add Item</button>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main class="max-w-6xl mx-auto px-4 py-6">
+    <div class="mb-4">
+      <p id="statsText" class="text-gray-600 text-sm">0 items, 0 pending sync</p>
+    </div>
+    <div class="bg-white shadow rounded overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Item</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quantity</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="itemsTableBody">
+          <tr id="noItemsRow">
+            <td colspan="5" class="text-center text-gray-500 py-4">No items found. Add your first item!</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- Modal -->
+  <div id="itemModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
+    <div class="bg-white p-6 rounded shadow w-full max-w-md">
+      <h2 class="text-lg font-semibold mb-4" id="modalTitle">Add Item</h2>
+      <form id="itemForm">
+        <input type="hidden" id="itemId" />
+        <label class="block text-sm font-medium mb-1">Name</label>
+        <input type="text" id="itemName" required class="w-full border px-3 py-2 rounded mb-4" />
+
+        <label class="block text-sm font-medium mb-1">Category</label>
+        <select id="itemCategory" class="w-full border px-3 py-2 rounded mb-4">
+          <option>Electronics</option>
+          <option>Clothing</option>
+          <option>Furniture</option>
+          <option>Food</option>
+          <option>Other</option>
+        </select>
+
+        <label class="block text-sm font-medium mb-1">Quantity</label>
+        <input type="number" id="itemQuantity" min="1" value="1" required class="w-full border px-3 py-2 rounded mb-4" />
+
+        <label class="block text-sm font-medium mb-1">Description</label>
+        <textarea id="itemDescription" rows="3" class="w-full border px-3 py-2 rounded mb-4"></textarea>
+
+        <div class="flex justify-end space-x-2">
+          <button type="button" id="cancelBtn" class="bg-gray-300 px-4 py-2 rounded">Cancel</button>
+          <button type="submit" id="saveItemBtn" class="bg-indigo-600 text-white px-4 py-2 rounded">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      items: [],
+      isOnline: navigator.onLine
+    };
+
+    const elements = {
+      itemsTableBody: document.getElementById('itemsTableBody'),
+      noItemsRow: document.getElementById('noItemsRow'),
+      addItemBtn: document.getElementById('addItemBtn'),
+      itemModal: document.getElementById('itemModal'),
+      itemForm: document.getElementById('itemForm'),
+      itemId: document.getElementById('itemId'),
+      itemName: document.getElementById('itemName'),
+      itemCategory: document.getElementById('itemCategory'),
+      itemQuantity: document.getElementById('itemQuantity'),
+      itemDescription: document.getElementById('itemDescription'),
+      modalTitle: document.getElementById('modalTitle'),
+      cancelBtn: document.getElementById('cancelBtn'),
+      statsText: document.getElementById('statsText'),
+      statusDot: document.getElementById('statusDot'),
+      statusText: document.getElementById('statusText'),
+      syncBtn: document.getElementById('syncBtn')
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+      updateStatus();
+      loadLocalData();
+      renderItems();
+    });
+
+    window.addEventListener('online', updateStatus);
+    window.addEventListener('offline', updateStatus);
+
+    elements.addItemBtn.addEventListener('click', () => openModal());
+    elements.cancelBtn.addEventListener('click', () => closeModal());
+
+    elements.itemForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      saveItem();
+    });
+
+    elements.syncBtn.addEventListener('click', () => {
+      state.items.forEach(item => item.synced = true);
+      saveToLocalStorage();
+      renderItems();
+      alert('Items synced with server (simulated)');
+    });
+
+    function updateStatus() {
+      state.isOnline = navigator.onLine;
+      if (state.isOnline) {
+        elements.statusDot.classList.remove('offline');
+        elements.statusDot.classList.add('online');
+        elements.statusText.textContent = 'Online';
+        elements.syncBtn.disabled = state.items.filter(i => !i.synced).length === 0;
+      } else {
+        elements.statusDot.classList.remove('online');
+        elements.statusDot.classList.add('offline');
+        elements.statusText.textContent = 'Offline';
+        elements.syncBtn.disabled = true;
+      }
+    }
+
+    function openModal(item = null) {
+      elements.itemForm.reset();
+      elements.itemId.value = '';
+      elements.modalTitle.textContent = item ? 'Edit Item' : 'Add Item';
+
+      if (item) {
+        elements.itemId.value = item.id;
+        elements.itemName.value = item.name;
+        elements.itemCategory.value = item.category;
+        elements.itemQuantity.value = item.quantity;
+        elements.itemDescription.value = item.description || '';
+      }
+
+      elements.itemModal.classList.remove('hidden');
+    }
+
+    function closeModal() {
+      elements.itemModal.classList.add('hidden');
+    }
+
+    function saveItem() {
+      const id = elements.itemId.value;
+      const name = elements.itemName.value.trim();
+      const category = elements.itemCategory.value;
+      const quantity = parseInt(elements.itemQuantity.value);
+      const description = elements.itemDescription.value.trim();
+
+      if (!name || isNaN(quantity) || quantity < 1) {
+        alert('Please enter valid values');
+        return;
+      }
+
+      if (id) {
+        const index = state.items.findIndex(item => item.id === id);
+        if (index !== -1) {
+          state.items[index] = { ...state.items[index], name, category, quantity, description, synced: false };
+        }
+      } else {
+        state.items.push({
+          id: generateId(),
+          name,
+          category,
+          quantity,
+          description,
+          synced: false
+        });
+      }
+
+      saveToLocalStorage();
+      renderItems();
+      closeModal();
+    }
+
+    function deleteItem(id) {
+      if (confirm("Are you sure you want to delete this item?")) {
+        state.items = state.items.filter(item => item.id !== id);
+        saveToLocalStorage();
+        renderItems();
+      }
+    }
+
+    function renderItems() {
+      elements.itemsTableBody.innerHTML = '';
+
+      if (state.items.length === 0) {
+        elements.noItemsRow.classList.remove('hidden');
+        elements.statsText.textContent = "0 items, 0 pending sync";
+        return;
+      }
+
+      elements.noItemsRow.classList.add('hidden');
+
+      let pending = 0;
+
+      state.items.forEach(item => {
+        if (!item.synced) pending++;
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td class="px-6 py-4">${item.name}<br><small class="text-gray-500">${item.description || ''}</small></td>
+          <td class="px-6 py-4">${item.category}</td>
+          <td class="px-6 py-4">${item.quantity}</td>
+          <td class="px-6 py-4 text-sm">${item.synced ? 'Synced' : 'Pending'}</td>
+          <td class="px-6 py-4 space-x-2">
+            <button class="text-indigo-600 edit-btn">Edit</button>
+            <button class="text-red-600 delete-btn">Delete</button>
+          </td>
+        `;
+        elements.itemsTableBody.appendChild(row);
+
+        row.querySelector('.edit-btn').addEventListener('click', () => openModal(item));
+        row.querySelector('.delete-btn').addEventListener('click', () => deleteItem(item.id));
+      });
+
+      elements.statsText.textContent = `${state.items.length} item(s), ${pending} pending sync`;
+      elements.syncBtn.disabled = !state.isOnline || pending === 0;
+    }
+
+    function saveToLocalStorage() {
+      localStorage.setItem('inventoryItems', JSON.stringify(state.items));
+    }
+
+    function loadLocalData() {
+      const data = localStorage.getItem('inventoryItems');
+      if (data) {
+        state.items = JSON.parse(data);
+      }
+    }
+
+    function generateId() {
+      return Date.now().toString(36) + Math.random().toString(36).substring(2);
+    }
+  </script>
+</body>
+</html>
