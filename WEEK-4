@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offline Inventory Manager</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --primary: #4f46e5;
+      --secondary: #f9fafb;
+      --accent: #10b981;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f3f4f6;
+    }
+
+    .status-indicator {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 6px;
+    }
+
+    .online {
+      background-color: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+    }
+
+    .offline {
+      background-color: #ef4444;
+    }
+
+    .slide-in {
+      animation: slideIn 0.3s ease-out forwards;
+    }
+
+    @keyframes slideIn {
+      from {
+        transform: translateY(20px);
+        opacity: 0;
+      }
+
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    .pulse {
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% {
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+      }
+
+      70% {
+        box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+      }
+
+      100% {
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="min-h-screen bg-gray-100">
+    <!-- Header -->
+    <header class="bg-white shadow-sm">
+      <div class="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
+        <div class="flex items-center">
+          <img src="https://placehold.co/40x40" alt="Inventory App Logo - Cube with arrows indicating in/out flow"
+            class="h-10 w-10 rounded-md">
+          <h1 class="ml-3 text-xl font-semibold text-gray-900">Offline Inventory</h1>
+        </div>
+        <div class="flex items-center">
+          <div id="connectionStatus" class="flex items-center mr-4">
+            <span class="status-indicator offline" id="statusDot"></span>
+            <span class="text-sm" id="statusText">Offline</span>
+          </div>
+          <button id="syncBtn"
+            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            disabled>
+            <svg class="-ml-0.5 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"
+              fill="currentColor">
+              <path fill-rule="evenodd"
+                d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
+                clip-rule="evenodd" />
+            </svg>
+            Sync Changes
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+      <div class="mb-6 flex justify-between items-center">
+        <div>
+          <h2 class="text-lg font-medium text-gray-900">Inventory Items</h2>
+          <p id="statsText" class="mt-1 text-sm text-gray-500">0 items, 0 pending sync</p>
+        </div>
+        <button id="addItemBtn"
+          class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+          <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd"
+              d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
+              clip-rule="evenodd" />
+          </svg>
+          Add Item
+        </button>
+      </div>
+
+      <!-- Items Table -->
+      <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Item</th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Category</th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Quantity</th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status</th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions</th>
+              </tr>
+            </thead>
+            <tbody id="itemsTableBody" class="bg-white divide-y divide-gray-200">
+              <!-- Items will be inserted here -->
+              <tr id="noItemsRow">
+                <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">No items found. Add your first item!
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Sync Notification -->
+      <div id="syncNotification" class="hidden fixed bottom-4 right-4">
+        <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 rounded shadow-lg">
+          <div class="flex items-center">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span id="syncMessage">Changes synchronized successfully!</span>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Add/Edit Item Modal -->
+    <div id="itemModal" class="hidden fixed z-10 inset-0 overflow-y-auto">
+      <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 transition-opacity" aria-hidden="true">
+          <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+        </div>
+        <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+        <div
+          class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+          <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+            <div class="sm:flex sm:items-start">
+              <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                <h3 class="text-lg leading-6 font-medium text-gray-900" id="modalTitle">Add New Item</h3>
+                <div class="mt-4">
+                  <form id="itemForm">
+                    <input type="hidden" id="itemId">
+                    <div class="mb-4">
+                      <label for="itemName" class="block text-sm font-medium text-gray-700">Item Name</label>
+                      <input type="text" id="itemName"
+                        class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                        required>
+                    </div>
+                    <div class="mb-4">
+                      <label for="itemCategory" class="block text-sm font-medium text-gray-700">Category</label>
+                      <select id="itemCategory"
+                        class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <option value="Electronics">Electronics</option>
+                        <option value="Clothing">Clothing</option>
+                        <option value="Furniture">Furniture</option>
+                        <option value="Food">Food</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                    <div class="mb-4">
+                      <label for="itemQuantity" class="block text-sm font-medium text-gray-700">Quantity</label>
+                      <input type="number" id="itemQuantity" min="1"
+                        class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                        value="1" required>
+                    </div>
+                    <div class="mb-4">
+                      <label for="itemDescription" class="block text-sm font-medium text-gray-700">Description</label>
+                      <textarea id="itemDescription" rows="3"
+                        class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"></textarea>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+            <button id="saveItemBtn"
+              class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:ml-3 sm:w-auto sm:text-sm">
+              Save
+            </button>
+            <button id="cancelBtn"
+              class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // App state
+    const state = {
+      items: [],
+      pendingSync: false,
+      isOnline: false,
+      lastSyncTime: null,
+      mockServer: [
+        // These would be replaced with actual server data in a real app
+        { id: '1', name: 'Laptop Pro', category: 'Electronics', quantity: 12, description: 'High performance laptop', synced: true },
+        { id: '2', name: 'Desk Chair', category: 'Furniture', quantity: 5, description: 'Ergonomic office chair', synced: true }
+      ]
+    };
+
+    // DOM elements
+    const elements = {
+      itemsTableBody: document.getElementById('itemsTableBody'),
+      noItemsRow: document.getElementById('noItemsRow'),
+      addItemBtn: document.getElementById('addItemBtn'),
+      itemModal: document.getElementById('itemModal'),
+      itemForm: document.getElementById('itemForm'),
+      modalTitle: document.getElementById('modalTitle'),
+      itemId: document.getElementById('itemId'),
+      itemName: document.getElementById('itemName'),
+      itemCategory: document.getElementById('itemCategory'),
+      itemQuantity: document.getElementById('itemQuantity'),
+      itemDescription: document.getElementById('itemDescription'),
+      saveItemBtn: document.getElementById('saveItemBtn'),
+      cancelBtn: document.getElementById('cancelBtn'),
+      syncBtn: document.getElementById('syncBtn'),
+      statusDot: document.getElementById('statusDot'),
+      statusText: document.getElementById('statusText'),
+      statsText: document.getElementById('statsText'),
+      syncNotification: document.getElementById('syncNotification'),
+      syncMessage: document.getElementById('syncMessage')
+    };
+
+    // Initialize the app
+    document.addEventListener('DOMContentLoaded', () => {
+      // Check online status
+      checkOnlineStatus();
+
+      // Set up event listeners
+      setupEventListeners();
+
+      // Load data from local storage
+      loadLocalData();
+
+      // Render the items
+      renderItems();
+    });
+
+    // Event listeners
+    function setupEventListeners() {
+      // Monitor online status
+      window.addEventListener('online', () => {
+        checkOnlineStatus();
+        showSyncNotification('You are now online. Changes can be synchronized.', true);
+      });
+
+      window.addEventListener('offline', () => {
+        checkOnlineStatus();
+        showSyncNotification('You are offline. Changes will be saved locally.', false);
+      });
+
+      // Add new item button
+      elements.addItemBtn.addEventListener('click', () => {
+        openItemModal();
+      });
+
+      // Form buttons
+      elements.cancelBtn.addEventListener('click', closeItemModal);
+      elements.saveItemBtn.addEventListener('click', saveItem);
+
+      // Sync button
+      elements.syncBtn.addEventListener('click', syncChanges);
+    }
+
+    // Check online status
+    function checkOnlineStatus() {
+      state.isOnline = navigator.onLine;
+      updateStatusIndicator();
+      updateSyncButton();
+    }
+
+    // Update the status indicator
+    function updateStatusIndicator() {
+      if (state.isOnline) {
+        elements.statusDot.classList.remove('offline');
+        elements.statusDot.classList.add('online');
+        elements.statusText.textContent = 'Online';
+        elements.statusText.classList.remove('text-gray-500');
+        elements.statusText.classList.add('text-green-600');
+      } else {
+        elements.statusDot.classList.remove('online');
+        elements.statusDot.classList.add('offline');
+        elements.statusText.textContent = 'Offline';
+        elements.statusText.classList.remove('text-green-600');
+        elements.statusText.classList.add('text-gray-500');
+      }
+    }
+
+    // Update sync button state
+    function updateSyncButton() {
+      const hasPendingChanges = state.items.some(item => !item.synced);
+
+      elements.syncBtn.disabled = !state.isOnline || !hasPendingChanges;
+
+      if (hasPendingChanges && !state.isOnline) {
+        elements.syncBtn.title = 'Go online to sync changes';
+      } else if (!hasPendingChanges) {
+        elements.syncBtn.title = 'No changes to sync';
+      } else {
+        elements.syncBtn.title = 'Sync changes with server';
+      }
+    }
+
+    // Load data from local storage
+    function loadLocalData() {
+      const savedItems = localStorage.getItem('inventoryItems');
+      if (savedItems) {
+        state.items = JSON.parse(savedItems);
+      }
+
+      // Initial load - merge with mock server data if empty
+      if (state.items.length === 0) {
+        state.items = [...state.mockServer];
+        saveToLocalStorage();
+      }
+
+      updateStats();
+    }
+
+    // Save to local storage
+    function saveToLocalStorage() {
+      localStorage.setItem('inventoryItems', JSON.stringify(state.items));
+      updateStats();
+      updateSyncButton();
+    }
+
+    // Update stats display
+    function updateStats() {
+      const totalItems = state.items.length;
+      const pendingSync = state.items.filter(item => !item.synced).length;
+
+      let statsText = `${totalItems} ${totalItems === 1 ? 'item' : 'items'}`;
+      if (pendingSync > 0) {
+        statsText += `, ${pendingSync} pending ${pendingSync === 1 ? 'sync' : 'syncs'}`;
+      }
+
+      if (state.lastSyncTime) {
+        statsText += ` • Last sync: ${new Date(state.lastSyncTime).toLocaleTimeString()}`;
+      }
+
+      elements.statsText.textContent = statsText;
+    }
+
+    // Render items to the table
+    function renderItems() {
+      if (state.items.length === 0) {
+        elements.noItemsRow.classList.remove('hidden');
+        return;
+      }
+
+      elements.noItemsRow.classList.add('hidden');
+
+      // Clear existing rows
+      while (elements.itemsTableBody.firstChild) {
+        elements.itemsTableBody.removeChild(elements.itemsTableBody.firstChild);
+      }
+
+      // Sort items by sync status (unsynced first)
+      const sortedItems = [...state.items].sort((a, b) => {
+        if (a.synced === b.synced) return 0;
+        return a.synced ? 1 : -1;
+      });
+
+      // Add new rows
+      sortedItems.forEach(item => {
+        const row = document.createElement('tr');
+        row.dataset.id = item.id;
+        row.className = 'slide-in';
+
+        if (!item.synced) {
+          row.classList.add('bg-yellow-50');
+        }
+
+        row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="flex items-center">
+                            ${!item.synced ? '<span class="mr-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Pending</span>' : ''}
+                            <div>
+                                <div class="text-sm font-medium text-gray-900">${item.name}</div>
+                                <div class="text-sm text-gray-500">${item.description || 'No description'}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm text-gray-900">${item.category}</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${item.quantity < 5 ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}">
+                            ${item.quantity} ${item.quantity === 1 ? 'unit' : 'units'}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        ${item.synced ? 'Synced' : 'Not synced'}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button class="text-indigo-600 hover:text-indigo-900 edit-item mr-3">Edit</button>
+                        <button class="text-red-600 hover:text-red-900 delete-item">Delete</button>
+                    </td>
+                `;
+
+        elements.itemsTableBody.appendChild(row);
+
+        // Add event listeners to buttons
+        row.querySelector('.edit-item').addEventListener('click', () => editItem(item.id));
+        row.querySelector('.delete-item').addEventListener('click', () => deleteItem(item.id));
+      });
+    }
+
+    // Open the item modal for adding a new item
+    function openItemModal() {
+      // Reset form
+      elements.itemForm.reset();
+      elements.itemId.value = '';
+      elements.modalTitle.textContent = 'Add New Item';
+
+      // Show modal
+      elements.itemModal.classList.remove('hidden');
+    }
+
+    // Close the item modal
+    function closeItemModal() {
+      elements.itemModal.classList.add('hidden');
+    }
+
+    // Edit an existing item
+    function editItem(id) {
+      const item = state.items.find(item => item.id === id);
+      if (!item) return;
+
+      // Fill form
+      elements.itemId.value = item.id;
+      elements.itemName.value = item.name;
+      elements.itemCategory.value = item.category;
+      elements.itemQuantity.value = item.quantity;
+      elements.itemDescription.value = item.description || '';
+      elements.modalTitle.textContent = 'Edit Item';
+
+      // Show modal
+      elements.itemModal.classList.remove('hidden');
+    }
+
+    // Save item (add or edit)
+    function saveItem() {
+      const id = elements.itemId.value;
+      const name = elements.itemName.value.trim();
+      const category = elements.itemCategory.value;
+      const quantity = parseInt(elements.itemQuantity.value);
+      const description = elements.itemDescription.value.trim();
+
+      // Basic validation
+      if (!name) {
+        alert('Please enter a name for the item');
+        return;
+      }
+
+      if (isNaN(quantity) || quantity < 1) {
+        alert('Please enter a valid quantity');
+        return;
+      }
+
+      if (id) {
+        // Edit existing item
+        const itemIndex = state.items.findIndex(item => item.id === id);
+        if (itemIndex !== -1) {
+          const originalItem = state.items[itemIndex];
+
+          // Keep sync status only if no changes that need sync
+          const needsSync = originalItem.name !== name ||
+            originalItem.category !== category ||
+            originalItem.quantity !== quantity ||
+            originalItem.description !== description;
+
+          state.items[itemIndex] = {
+            ...originalItem,
+            name,
+            category,
+            quantity,
+            description,
+            synced: needsSync ? false : originalItem.synced,
+            updatedAt: Date.now()
+          };
+        }
+      } else {
+        // Add new item
+        const newItem = {
+          id: generateId(),
+          name,
+          category,
+          quantity,
+          description: description || null,
+          synced: false,
+          createdAt: Date.now(),
+          updatedAt: null
+        };
+
+        state.items.push(newItem);
+      }
+
+      // Save to local storage
+      saveToLocalStorage();
+
+      // Re-render items
+      renderItems();
+
+      // Close modal
+      closeItemModal();
+    }
+
+    // Delete an item
+    function deleteItem(id) {
+      if (confirm('Are you sure you want to delete this item?')) {
+        const itemIndex = state.items.findIndex(item => item.id === id);
+        if (itemIndex !== -1) {
+          // For sync purposes, we might want to mark as deleted rather than actually remove
+          // But for this demo, we'll just remove it
+          state.items.splice(itemIndex, 1);
+
+          // Save to local storage
+          saveToLocalStorage();
+
+          // Re-render items
+          renderItems();
+        }
+      }
+    }
+
+    // Generate a unique ID
+    function generateId() {
+      return Date.now().toString(36) + Math.random().toString(36).substring(2);
+    }
+
+    // Show sync notification
+    function showSyncNotification(message, isSuccess) {
+      elements.syncMessage.textContent = message;
+      elements.syncNotification.classList.remove('hidden');
+
+      if (isSuccess) {
+        elements.syncNotification.querySelector('div').classList.remove('bg-red-100', 'border-red-500', 'text-red-700');
+        elements.syncNotification.querySelector('div').classList.add('bg-green-100', 'border-green-500', 'text-green-700');
+      } else {
+        elements.syncNotification.querySelector('div').classList.remove('bg-green-100', 'border-green-500', 'text-green-700');
+        elements.syncNotification.querySelector('div').classList.add('bg-red-100', 'border-red-500', 'text-red-700');
+      }
+
+      setTimeout(() => {
+        elements.syncNotification.classList.add('hidden');
+      }, 5000);
+    }
+
+    // Sync changes with server
+    function syncChanges() {
+      if (!state.isOnline) {
+        showSyncNotification('You are offline. Cannot sync changes.', false);
+        return;
+      }
+
+      const unsyncedItems = state.items.filter(item => !item.synced);
+      if (unsyncedItems.length === 0) {
+        showSyncNotification('No changes to sync.', false);
+        return;
+      }
+
+      // Show sync in progress
+      elements.syncBtn.disabled = true;
+      elements.syncBtn.innerHTML = `
+                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Syncing...
+            `;
+
+      // Simulate API call (in a real app, this would be a fetch/axios call)
+      setTimeout(() => {
+        // Mark all items as synced
+        state.items.forEach(item => {
+          item.synced = true;
+        });
+
+        state.lastSyncTime = Date.now();
+
+        // Save to local storage
+        saveToLocalStorage();
+
+        // Re-render items
+        renderItems();
+
+        // Reset sync button
+        elements.syncBtn.disabled = !state.isOnline;
+        elements.syncBtn.innerHTML = `
+                    <svg class="-ml-0.5 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
+                    </svg>
+                    Sync Changes
+                `;
+
+        showSyncNotification('Changes synchronized successfully!', true);
+
+        // Pulse effect for visual confirmation
+        elements.syncBtn.classList.add('pulse');
+        setTimeout(() => {
+          elements.syncBtn.classList.remove('pulse');
+        }, 2000);
+      }, 1500); // Simulate network delay
+    }
+  </script>
+</body>
+
+</html>
